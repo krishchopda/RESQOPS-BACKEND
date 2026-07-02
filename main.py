@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from routes.health import router as health_router
 from routes.ambulances import router as ambulances_router
 from routes.hospitals import router as hospitals_router
@@ -8,6 +9,13 @@ app = FastAPI(
     title="ResQOps API",
     description="AI Emergency Response Operating System",
     version="0.1.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(health_router)
