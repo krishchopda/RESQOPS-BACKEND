@@ -5,7 +5,7 @@ from routes.ambulances import router as ambulances_router
 from routes.hospitals import router as hospitals_router
 from routes.incidents import router as incidents_router
 from routes.dispatch import router as dispatch_router
-
+from routes.ai import router as ai_router
 app = FastAPI(
     title="ResQOps API",
     description="AI Emergency Response Operating System",
@@ -24,3 +24,4 @@ app.include_router(ambulances_router)
 app.include_router(hospitals_router)
 app.include_router(incidents_router)
 app.include_router(dispatch_router)
+app.include_router(ai_router)
