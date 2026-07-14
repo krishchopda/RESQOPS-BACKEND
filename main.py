@@ -7,6 +7,15 @@ from routes.incidents import router as incidents_router
 from routes.dispatch import router as dispatch_router
 from routes.ai import router as ai_router
 from routes.predictions import router as predictions_router
+from core.database import engine, Base
+from models.ambulance import Ambulance
+from models.hospital import Hospital
+from models.incident import Incident
+from routes.admin import router as admin_router
+
+
+# Create tables on startup
+Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="ResQOps API",
     description="AI Emergency Response Operating System",
@@ -27,3 +36,4 @@ app.include_router(incidents_router)
 app.include_router(dispatch_router)
 app.include_router(ai_router)
 app.include_router(predictions_router)
+app.include_router(admin_router)
