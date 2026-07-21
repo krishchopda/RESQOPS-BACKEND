@@ -16,7 +16,7 @@ Emergency dispatch is fragmented. Dispatchers must simultaneously track ambulanc
 
 ## Live Demo
 
-> **[Live URL here]** — Backend deployed on Railway · Frontend deployed on Vercel
+> https://resqops-frontend-lfwqglhuk-krishchopda-6940s-projects.vercel.app — Backend deployed on Railway · Frontend deployed on Vercel
 
 ---
 
