@@ -12,6 +12,8 @@ from models.ambulance import Ambulance
 from models.hospital import Hospital
 from models.incident import Incident
 from routes.admin import router as admin_router
+from routes.multi_dispatch import router as multi_dispatch_router
+from routes.assignments import router as assignments_router
 
 
 # Create tables on startup
@@ -25,10 +27,14 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
      allow_origins=[
-        "http://localhost:5173",
-        "https://resqops-frontend-lfwqglhuk-krishchopda-6940s-projects.vercel.app",
-        "https://*.vercel.app"
-    ],
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:5177",
+    "https://resqops-frontend-lfwqglhuk-krishchopda-6940s-projects.vercel.app",
+    "https://*.vercel.app"
+],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -41,3 +47,5 @@ app.include_router(dispatch_router)
 app.include_router(ai_router)
 app.include_router(predictions_router)
 app.include_router(admin_router)
+app.include_router(multi_dispatch_router)
+app.include_router(assignments_router)
