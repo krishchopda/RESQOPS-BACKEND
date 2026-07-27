@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.health import router as health_router
@@ -7,13 +8,13 @@ from routes.incidents import router as incidents_router
 from routes.dispatch import router as dispatch_router
 from routes.ai import router as ai_router
 from routes.predictions import router as predictions_router
-from core.database import engine, Base
+from core.database import engine, Base, SessionLocal
 from models.ambulance import Ambulance
 from models.hospital import Hospital
 from models.incident import Incident
 from routes.admin import router as admin_router
 from routes.multi_dispatch import router as multi_dispatch_router
-from routes.assignments import router as assignments_router
+from routes.assignments import router as assignments_router, check_and_reassign_timeouts
 
 
 # Create tables on startup
@@ -49,3 +50,23 @@ app.include_router(predictions_router)
 app.include_router(admin_router)
 app.include_router(multi_dispatch_router)
 app.include_router(assignments_router)
+
+
+TIMEOUT_CHECK_INTERVAL_SECONDS = 15
+
+async def _timeout_check_loop():
+    while True:
+        await asyncio.sleep(TIMEOUT_CHECK_INTERVAL_SECONDS)
+        db = SessionLocal()
+        try:
+            events = check_and_reassign_timeouts(db)
+            for event in events:
+                print(f"[timeout-check] {event}")
+        except Exception as e:
+            print(f"[timeout-check] error during timeout sweep: {e}")
+        finally:
+            db.close()
+
+@app.on_event("startup")
+async def start_timeout_checker():
+    asyncio.create_task(_timeout_check_loop())

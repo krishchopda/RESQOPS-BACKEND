@@ -113,15 +113,24 @@ def compute_score(
 # MAIN RECOMMENDATION ENGINE
 # ─────────────────────────────────────────────
 
-def get_recommendation(incident_id: int, db: Session) -> dict:
+def get_recommendation(incident_id: int, db: Session, exclude_ambulance_ids: list[int] = None) -> dict:
+    """
+    exclude_ambulance_ids: optional list of ambulance IDs to skip when scoring —
+    used for timeout reassignment, so the unresponsive unit isn't picked again.
+    """
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not incident:
         return {"error": f"Incident {incident_id} not found"}
 
-    all_ambulances = db.query(Ambulance).filter(
+    exclude_ambulance_ids = exclude_ambulance_ids or []
+
+    query = db.query(Ambulance).filter(
         Ambulance.status == "available",
         Ambulance.is_active == True
-    ).all()
+    )
+    if exclude_ambulance_ids:
+        query = query.filter(~Ambulance.id.in_(exclude_ambulance_ids))
+    all_ambulances = query.all()
 
     all_hospitals = db.query(Hospital).all()
 
@@ -153,6 +162,12 @@ def get_recommendation(incident_id: int, db: Session) -> dict:
                 "error": "No eligible ambulances",
                 "rejected_reasons": rejected_ambulances
             }
+
+    if not eligible_ambulances:
+        return {
+            "error": "No eligible ambulances remaining (all excluded or unavailable)",
+            "rejected_reasons": rejected_ambulances
+        }
 
     if not eligible_hospitals:
         return {
