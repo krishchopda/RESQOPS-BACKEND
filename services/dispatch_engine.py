@@ -175,36 +175,36 @@ def get_recommendation(incident_id: int, db: Session, exclude_ambulance_ids: lis
             "rejected_reasons": rejected_hospitals
         }
 
-    # Score all eligible combinations using real travel time
+    # Score all eligible combinations using real travel time.
+    # Cache each (ambulance, hospital) pair's travel time so we only ever
+    # call the OSRM routing API once per pair, instead of three separate
+    # times (scoring, final result, confidence) — this was the main cause
+    # of connections piling up and exhausting the DB pool under load.
+    travel_time_cache = {}
+
+    def cached_travel_time(amb, hosp):
+        key = (amb.id, hosp.id)
+        if key not in travel_time_cache:
+            t_amb = get_travel_time(amb.latitude, amb.longitude, incident.latitude, incident.longitude)
+            t_hosp = get_travel_time(incident.latitude, incident.longitude, hosp.latitude, hosp.longitude)
+            travel_time_cache[key] = (t_amb, t_hosp)
+        return travel_time_cache[key]
+
     best_score = float("inf")
     best_ambulance = None
     best_hospital = None
 
     for ambulance in eligible_ambulances:
-        time_amb = get_travel_time(
-            ambulance.latitude, ambulance.longitude,
-            incident.latitude, incident.longitude
-        )
         for hospital in eligible_hospitals:
-            time_hosp = get_travel_time(
-                incident.latitude, incident.longitude,
-                hospital.latitude, hospital.longitude
-            )
+            time_amb, time_hosp = cached_travel_time(ambulance, hospital)
             score = compute_score(ambulance, hospital, incident, time_amb, time_hosp)
             if score < best_score:
                 best_score = score
                 best_ambulance = ambulance
                 best_hospital = hospital
 
-    # Final travel times for best combination
-    final_time_amb = get_travel_time(
-        best_ambulance.latitude, best_ambulance.longitude,
-        incident.latitude, incident.longitude
-    )
-    final_time_hosp = get_travel_time(
-        incident.latitude, incident.longitude,
-        best_hospital.latitude, best_hospital.longitude
-    )
+    # Final travel times for best combination — reuse cached values.
+    final_time_amb, final_time_hosp = cached_travel_time(best_ambulance, best_hospital)
 
     # Also get distances for display
     final_dist_amb = haversine(
@@ -216,18 +216,11 @@ def get_recommendation(incident_id: int, db: Session, exclude_ambulance_ids: lis
         best_hospital.latitude, best_hospital.longitude
     )
 
-    # Confidence score
+    # Confidence score — reuse cached travel times instead of recomputing.
     all_scores = []
     for ambulance in eligible_ambulances:
-        time_amb = get_travel_time(
-            ambulance.latitude, ambulance.longitude,
-            incident.latitude, incident.longitude
-        )
         for hospital in eligible_hospitals:
-            time_hosp = get_travel_time(
-                incident.latitude, incident.longitude,
-                hospital.latitude, hospital.longitude
-            )
+            time_amb, time_hosp = cached_travel_time(ambulance, hospital)
             all_scores.append(compute_score(ambulance, hospital, incident, time_amb, time_hosp))
 
     if len(all_scores) > 1:
