@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 from core.database import get_db
 from models.ambulance import Ambulance
 from models.incident import Incident
@@ -35,6 +36,8 @@ def create_assignment(req: AssignRequest, db: Session = Depends(get_db)):
         "ambulance_id": req.ambulance_id,
         "ambulance_name": ambulance.name,
         "phase": "dispatched",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "phase_updated_at": datetime.now(timezone.utc).isoformat(),
         "incident": {
             "id": incident.id, "type": incident.type,
             "severity": incident.severity, "description": incident.description,
@@ -52,6 +55,11 @@ def create_assignment(req: AssignRequest, db: Session = Depends(get_db)):
 def get_assignment(ambulance_id: int):
     return active_assignments.get(ambulance_id) or {"phase": "idle"}
 
+@router.get("/active")
+def list_active_assignments():
+    """All currently active assignments — used for timeout/reassignment checks."""
+    return list(active_assignments.values())
+
 @router.post("/status")
 def update_status(update: StatusUpdate, db: Session = Depends(get_db)):
     assignment = active_assignments.get(update.ambulance_id)
@@ -60,6 +68,14 @@ def update_status(update: StatusUpdate, db: Session = Depends(get_db)):
         return {"error": "Ambulance not found"}
 
     if update.status == "available":
+        # Case complete: mark the incident resolved so it drops off the
+        # active incidents list and the map, then free up the ambulance.
+        if assignment:
+            incident = db.query(Incident).filter(Incident.id == assignment["incident"]["id"]).first()
+            if incident:
+                incident.status = "resolved"
+                db.commit()
+
         ambulance.status = "available"
         db.commit()
         active_assignments.pop(update.ambulance_id, None)
@@ -67,4 +83,15 @@ def update_status(update: StatusUpdate, db: Session = Depends(get_db)):
 
     if assignment:
         assignment["phase"] = update.status
+        assignment["phase_updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Move the ambulance's map marker to the hospital once it arrives,
+        # so the dashboard reflects where the unit actually is.
+        if update.status == "at_hospital":
+            hospital = assignment.get("hospital")
+            if hospital:
+                ambulance.latitude = hospital["latitude"]
+                ambulance.longitude = hospital["longitude"]
+                db.commit()
+
     return {"message": f"Status: {update.status}", "assignment": assignment}
